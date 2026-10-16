@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "Emergency SOS",
+    "slug": "emergency-sos",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0A0A",
+    "splash": {
+      "backgroundColor": "#0A0A0A",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.emergencysos.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0A"
+      },
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "FOREGROUND_SERVICE", "VIBRATE"]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "platforms": ["ios", "android", "web"],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Emergency SOS to access your location to share it with trusted contacts when you trigger SOS."
+        }
+      ]
+    ]
+  }
+}
