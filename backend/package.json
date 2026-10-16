@@ -1,0 +1,14 @@
+{
+  "name": "emergency-sos-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "cors": "^2.8.5",
+    "nanoid": "^5.0.9"
+  }
+}

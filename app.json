@@ -6,10 +6,6 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0A0A0A",
-    "splash": {
-      "backgroundColor": "#0A0A0A",
-      "resizeMode": "contain"
-    },
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true
@@ -19,7 +15,14 @@
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0A"
       },
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "FOREGROUND_SERVICE", "VIBRATE"]
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE",
+        "VIBRATE",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "bundler": "metro"
@@ -31,7 +34,19 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow Emergency SOS to access your location to share it with trusted contacts when you trigger SOS."
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A0A0A",
+          "resizeMode": "contain"
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "072478d9-0cd8-4cf1-9ef1-f32169a1e202"
+      }
+    }
   }
 }

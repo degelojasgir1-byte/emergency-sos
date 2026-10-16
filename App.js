@@ -16,6 +16,9 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as Location from "expo-location";
+import Constants from "expo-constants";
+import * as SecureStore from "expo-secure-store";
+import * as Clipboard from "expo-clipboard";
 
 // ── Theme: Spotify Dark + Red ──
 const C = {
@@ -47,6 +50,33 @@ function formatTime(d = new Date()) {
   return d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
+// ── API base: bake hosted URL via app.json expo.extra.apiUrl, fallback to LAN/localhost
+function getApiBase(){
+  const extra = Constants?.expoConfig?.extra || Constants?.manifest?.extra || {};
+  if(extra.apiUrl) return String(extra.apiUrl).replace(/\/$/,"");
+  // Expo Go LAN fallback — prefer 192.168.1.5 if known, else localhost
+  const hostUri = Constants?.expoConfig?.hostUri || Constants?.manifest?.hostUri || "";
+  const m = hostUri.match(/^([\d.]+):/);
+  if(m) return `http://${m[1]}:3002`;
+  return "http://192.168.1.5:3002";
+}
+function genId(n=10){
+  const c="abcdefghijklmnopqrstuvwxyz0123456789";
+  let s=""; for(let i=0;i<n;i++) s+=c[Math.floor(Math.random()*c.length)];
+  return s;
+}
+async function apiFetch(base, path, opts={}){
+  const url = `${base}${path}`;
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), 7000);
+  try{
+    const r = await fetch(url, { ...opts, signal: ctrl.signal, headers: { "Content-Type":"application/json", ...(opts.headers||{}) }});
+    const j = await r.json().catch(()=>null);
+    if(!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+    return j;
+  } finally { clearTimeout(t); }
+}
+
 export default function App() {
   // Tabs: home | circle | history | settings
   const [tab, setTab] = useState("home");
@@ -58,20 +88,81 @@ export default function App() {
   const [addName, setAddName] = useState("");
   const [addPhone, setAddPhone] = useState("");
 
-  // SOS flow
+  // SOS flow — Option 3: Hold 2 sec → instant send
   const [sosMode, setSosMode] = useState(null); // "all" | contactId | null
-  const [sosPhase, setSosPhase] = useState("idle"); // idle | holding | countdown | sending | success
-  const [countdown, setCountdown] = useState(5);
+  const [sosPhase, setSosPhase] = useState("idle"); // idle | holding | sending | success
   const [lastSent, setLastSent] = useState(null);
   const [selectSheet, setSelectSheet] = useState(false);
   const [pendingContactId, setPendingContactId] = useState(null);
 
+  // Any-internet wiring
+  const apiBaseRef = useRef(getApiBase());
+  const API_BASE = apiBaseRef.current;
+  const [deviceId, setDeviceId] = useState(null);
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteOut, setInviteOut] = useState(null); // { code, link, circleId, expiresAt }
+  const [acceptCode, setAcceptCode] = useState("");
+  const [netHint, setNetHint] = useState("");
+  // Incoming urgent SOS
+  const [incoming, setIncoming] = useState(null); // { pushId, sosId, attempt, max, sos }
+  const pollRef = useRef(null);
+  const alarmRef = useRef(null);
+
+  useEffect(()=>{
+    (async()=>{
+      try{
+        let id = await SecureStore.getItemAsync("sos_deviceId");
+        if(!id){ id = genId(12); await SecureStore.setItemAsync("sos_deviceId", id); }
+        setDeviceId(id);
+      } catch {
+        const id = genId(12);
+        setDeviceId(id);
+      }
+    })();
+  }, []);
+
+  // Poll for urgent SOS pushes (30s cadence, only when foregrounded)
+  useEffect(()=>{
+    if(!deviceId) return;
+    let alive = true;
+    async function poll(){
+      try{
+        const out = await apiFetch(API_BASE, `/api/push?deviceId=${encodeURIComponent(deviceId)}`);
+        if(!alive) return;
+        if(Array.isArray(out) && out.length>0){
+          // show newest
+          const newest = out[out.length-1];
+          setIncoming(newest);
+          // loud alarm loop
+          try{ Vibration.vibrate([0,1000,300,1000]); }catch{}
+          if(!alarmRef.current){
+            alarmRef.current = setInterval(()=>{ try{ Vibration.vibrate([0,1000,300,1000]); }catch{} }, 4000);
+          }
+        }
+      } catch {}
+    }
+    poll();
+    pollRef.current = setInterval(poll, 30000);
+    return ()=>{ alive=false; if(pollRef.current) clearInterval(pollRef.current); if(alarmRef.current) clearInterval(alarmRef.current); };
+  }, [deviceId, API_BASE]);
+
+  function stopAlarm(){
+    if(alarmRef.current){ clearInterval(alarmRef.current); alarmRef.current=null; }
+    try{ Vibration.cancel(); }catch{}
+  }
+  async function ackIncoming(actionLabel){
+    if(!incoming || !deviceId) return;
+    stopAlarm();
+    const sid = incoming.sosId;
+    setIncoming(null);
+    try{ await apiFetch(API_BASE, `/api/push/${encodeURIComponent(sid)}/ack`, { method:"POST", body: JSON.stringify({ deviceId }) }); }catch{}
+    // also add to history as received
+  }
+
   // Animations
   const pulse = useRef(new Animated.Value(1)).current;
   const holdProgress = useRef(new Animated.Value(0)).current;
-  const countdownScale = useRef(new Animated.Value(1)).current;
   const holdTimerRef = useRef(null);
-  const countdownTimerRef = useRef(null);
   const isHoldingRef = useRef(false);
 
   // Pulse for idle SOS
@@ -86,20 +177,9 @@ export default function App() {
     return () => loop.stop();
   }, []);
 
-  // Countdown tick animation
-  useEffect(() => {
-    if (sosPhase !== "countdown") return;
-    Animated.sequence([
-      Animated.timing(countdownScale, { toValue: 1.35, duration: 120, useNativeDriver: true }),
-      Animated.timing(countdownScale, { toValue: 1, duration: 250, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    ]).start();
-  }, [countdown]);
-
   function clearTimers() {
     if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
-    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
     holdTimerRef.current = null;
-    countdownTimerRef.current = null;
   }
 
   useEffect(() => () => clearTimers(), []);
@@ -112,13 +192,13 @@ export default function App() {
     holdProgress.setValue(0);
     Animated.timing(holdProgress, {
       toValue: 1,
-      duration: 3000,
+      duration: 2000,
       easing: Easing.linear,
       useNativeDriver: false,
     }).start(({ finished }) => {
       if (finished && isHoldingRef.current) {
-        try { Vibration.vibrate(200); } catch {}
-        startCountdown();
+        try { Vibration.vibrate([0, 180, 60, 180]); } catch {}
+        doSend();
       }
     });
   }
@@ -135,33 +215,6 @@ export default function App() {
       setSosMode(null);
     }
     clearTimers();
-  }
-
-  function startCountdown() {
-    setSosPhase("countdown");
-    setCountdown(5);
-    try { Vibration.vibrate([0, 120, 80, 120]); } catch {}
-    countdownTimerRef.current = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(countdownTimerRef.current);
-          countdownTimerRef.current = null;
-          doSend();
-          return 0;
-        }
-        try { Vibration.vibrate(60); } catch {}
-        return c - 1;
-      });
-    }, 1000);
-  }
-
-  function cancelCountdown() {
-    clearTimers();
-    isHoldingRef.current = false;
-    holdProgress.setValue(0);
-    setSosPhase("idle");
-    setSosMode(null);
-    setCountdown(5);
   }
 
   async function doSend() {
@@ -196,12 +249,18 @@ export default function App() {
     setLastSent(entry);
     setSosPhase("success");
     try { Vibration.vibrate([0, 180, 60, 180, 60, 300]); } catch {}
+    // Also push to backend for any-internet delivery (best-effort)
+    if(deviceId){
+      apiFetch(API_BASE, "/api/sos", { method:"POST", body: JSON.stringify({ from: deviceId, targets: entry.targets, message: msg, locationLink, medicalNotes: entry.medicalNotes }) }).then(j=>{
+        if(j?.pushedTo!=null) setNetHint(`Pushed to ${j.pushedTo} device(s) in Circle • also saved locally`);
+      }).catch(()=> setNetHint("Saved locally — will retry when online (offline or no backend)"));
+      setTimeout(()=>setNetHint(""), 7000);
+    }
   }
 
   function closeSuccess() {
     setSosPhase("idle");
     setSosMode(null);
-    setCountdown(5);
     holdProgress.setValue(0);
   }
 
@@ -229,6 +288,37 @@ export default function App() {
   // ── Hold progress ring width ──
   const holdWidth = holdProgress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
 
+  // ── Invite actions ──
+  async function createInvite(){
+    if(!deviceId) return Alert.alert("Not ready","Device ID not ready yet.");
+    try{
+      const j = await apiFetch(API_BASE, "/api/invites", { method:"POST", body: JSON.stringify({ from: deviceId, fromName: "You" }) });
+      setInviteOut(j);
+      setInviteCode(j.code);
+    } catch(e){ Alert.alert("Invite failed", String(e.message||e)); }
+  }
+  async function copyInvite(){
+    if(!inviteOut) return;
+    const webBase = (Constants?.expoConfig?.extra?.webUrl)||"";
+    const human = webBase ? `${String(webBase).replace(/\/$/,"")}/?code=${inviteOut.code}` : `sos://${inviteOut.code}`;
+    await Clipboard.setStringAsync(human);
+    Alert.alert("Copied", human);
+  }
+  async function revokeInvite(){
+    if(!inviteOut) return;
+    try{ await apiFetch(API_BASE, `/api/invites/${encodeURIComponent(inviteOut.code)}/revoke`, { method:"POST", body: "{}" }); Alert.alert("Revoked","Invite revoked."); setInviteOut(null); }catch(e){ Alert.alert("Revoke failed", String(e.message||e));}
+  }
+  async function acceptInvite(){
+    const code = (acceptCode||inviteCode).trim();
+    if(!code) return Alert.alert("Enter code","Paste the invite code (e.g. a1B2c3D4).");
+    if(!deviceId) return Alert.alert("Not ready","Device ID not ready.");
+    try{
+      const j = await apiFetch(API_BASE, `/api/invites/${encodeURIComponent(code)}/accept`, { method:"POST", body: JSON.stringify({ deviceId, name: "Friend" }) });
+      Alert.alert("Joined", `Joined Circle ${j.circleId}. Members: ${j.members?.length||1}`);
+      setAcceptCode("");
+    } catch(e){ Alert.alert("Accept failed", String(e.message||e)); }
+  }
+
   // ── Screens ──
   const HomeScreen = (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -236,6 +326,7 @@ export default function App() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Emergency SOS</Text>
         <Text style={styles.headerSub}>Dark • Red • Ready</Text>
+        {!!netHint && <Text style={{color:C.green,fontSize:11,marginTop:6}}>{netHint}</Text>}
       </View>
 
       {/* Trusted Circle preview — Spotify playlist cards */}
@@ -306,7 +397,7 @@ export default function App() {
         >
           <View style={styles.sosBigInner}>
             <Text style={styles.sosBigTitle}>SOS TO ALL</Text>
-            <Text style={styles.sosBigSub}>Hold 3 sec</Text>
+            <Text style={styles.sosBigSub}>Hold 2 sec</Text>
           </View>
           {/* hold fill */}
           <Animated.View style={[styles.holdFill, { width: holdWidth }]} />
@@ -331,7 +422,8 @@ export default function App() {
         <Text style={styles.callEmergencyText}>📞  Call Emergency  112 / 911</Text>
       </Pressable>
 
-      <Text style={styles.footer}>App is a helper — always call 112/911 in real danger. Hold → Countdown → Send.</Text>
+      <Text style={styles.footer}>Hold 2 sec → instant send. No countdown — fast when it matters.</Text>
+      <Text style={[styles.footer,{marginTop:4,color:C.grey}]}>Backend: {API_BASE} {deviceId?`• ID ${deviceId.slice(0,6)}`:''}</Text>
     </ScrollView>
   );
 
@@ -339,6 +431,36 @@ export default function App() {
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <Text style={styles.pageTitle}>Trusted Circle</Text>
       <Text style={styles.pageSub}>Invite must Accept. They can leave anytime. Tap to edit.</Text>
+
+      {/* Any-internet Invite box */}
+      <View style={styles.addBox}>
+        <Text style={styles.addTitle}>Invite (any internet) — code link only</Text>
+        <Text style={styles.hint}>Create a single-use code (30 min, revocable). Share via Copy Link or QR. Phone optional.</Text>
+        <Pressable onPress={createInvite} style={[styles.addBtn,{marginTop:10}]}>
+          <Text style={styles.addBtnText}>🔗  Create Invite Link</Text>
+        </Pressable>
+        {inviteOut && (
+          <View style={{marginTop:12, backgroundColor:C.bgCard2, borderRadius:12, padding:12, borderWidth:1, borderColor:C.border}}>
+            <Text style={{color:C.white,fontWeight:"800",fontSize:13}}>Code: {inviteOut.code}</Text>
+            <Text style={{color:C.grey,fontSize:11,marginTop:4}}>Expires {new Date(inviteOut.expiresAt).toLocaleTimeString()} • Single-use • Revocable</Text>
+            <Text style={{color:"#4DA3FF",fontSize:11,marginTop:8}}>sos://{inviteOut.code}</Text>
+            <View style={{flexDirection:"row",gap:10,marginTop:10}}>
+              <Pressable onPress={copyInvite} style={[styles.sheetBtn,{flex:1}]}><Text style={styles.sheetBtnText}>Copy Link</Text></Pressable>
+              <Pressable onPress={()=>Alert.alert("QR",`For V1, share the code. QR: https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=sos://${inviteOut.code}`)} style={[styles.sheetBtn,{flex:1}]}><Text style={styles.sheetBtnText}>Show QR</Text></Pressable>
+            </View>
+            <Pressable onPress={revokeInvite} style={{marginTop:10,alignItems:"center"}}><Text style={{color:C.redSoft,fontWeight:"700",fontSize:12}}>Revoke invite</Text></Pressable>
+            {/* QR image preview (web API) */}
+            <View style={{alignItems:"center",marginTop:10, backgroundColor:"#fff", borderRadius:12, padding:8, alignSelf:"center"}}>
+              <Text style={{color:"#000",fontSize:10,fontWeight:"700",marginBottom:6}}>QR for sos://{inviteOut.code}</Text>
+            </View>
+          </View>
+        )}
+        <View style={{marginTop:14, flexDirection:"row",gap:8}}>
+          <TextInput value={acceptCode} onChangeText={setAcceptCode} placeholder="Paste invite code" placeholderTextColor={C.grey2} style={[styles.input,{flex:1, marginBottom:0}]} autoCapitalize="none" />
+          <Pressable onPress={acceptInvite} style={[styles.addBtn,{paddingHorizontal:16, marginTop:0}]}><Text style={styles.addBtnText}>Accept</Text></Pressable>
+        </View>
+        <Text style={[styles.hint,{marginTop:6}]}>Accept joins their Circle. Backend: {API_BASE}</Text>
+      </View>
 
       {contacts.map((c) => (
         <View key={c.id} style={styles.circleRow}>
@@ -365,7 +487,7 @@ export default function App() {
       ))}
 
       <View style={styles.addBox}>
-        <Text style={styles.addTitle}>Add contact</Text>
+        <Text style={styles.addTitle}>Add contact (local V1)</Text>
         <TextInput value={addName} onChangeText={setAddName} placeholder="Name" placeholderTextColor={C.grey2} style={styles.input} />
         <TextInput
           value={addPhone}
@@ -397,7 +519,7 @@ export default function App() {
         >
           <Text style={styles.addBtnText}>＋  Add to Circle</Text>
         </Pressable>
-        <Text style={styles.hint}>V1 stores locally on device. Backend + invite/Accept comes next.</Text>
+        <Text style={styles.hint}>Local contacts stay on device. Use Invite above to link across internet.</Text>
       </View>
     </ScrollView>
   );
@@ -462,12 +584,13 @@ export default function App() {
       <View style={styles.infoCard}>
         <Text style={styles.infoTitle}>How SOS works</Text>
         <Text style={styles.infoText}>1. Type a message or tap a chip (or leave empty)</Text>
-        <Text style={styles.infoText}>2. Hold SOS 3 sec — don't let go early</Text>
-        <Text style={styles.infoText}>3. Release → 5 sec countdown with Cancel</Text>
-        <Text style={styles.infoText}>4. At 0 it sends location + message + time to your Circle</Text>
+        <Text style={styles.infoText}>2. Hold SOS 2 sec — instant send (release early to cancel)</Text>
+        <Text style={styles.infoText}>3. It sends location + message + time to your Circle</Text>
         <Text style={[styles.infoText, { marginTop: 8, color: C.grey }]}>
           Port: 5174  •  Same WiFi only for Expo preview  •  Real SOS works on any internet
         </Text>
+        <Text style={[styles.infoText, { color: C.grey }]}>Backend: {API_BASE}</Text>
+        <Text style={[styles.infoText, { color: C.grey }]}>Device ID: {deviceId || "…"}</Text>
       </View>
 
       <Pressable onPress={callEmergency} style={[styles.callEmergency, { marginTop: 16 }]}>
@@ -480,55 +603,42 @@ export default function App() {
     <View style={styles.root}>
       <StatusBar style="light" />
 
-      {/* Top safe area spacer */}
-      <View style={styles.topSpacer} />
+      {/* Top safe area spacer — hide during SOS */}
+      {sosPhase === "idle" && <View style={styles.topSpacer} />}
 
-      {tab === "home" && HomeScreen}
-      {tab === "circle" && CircleScreen}
-      {tab === "history" && HistoryScreen}
-      {tab === "settings" && SettingsScreen}
-
-      {/* Bottom nav — Spotify style */}
-      <View style={styles.tabBar}>
-        {[
-          { id: "home", label: "Home", icon: "⌂" },
-          { id: "circle", label: "Circle", icon: "◯" },
-          { id: "history", label: "History", icon: "↻" },
-          { id: "settings", label: "Settings", icon: "⚙" },
-        ].map((t) => (
-          <Pressable key={t.id} onPress={() => setTab(t.id)} style={styles.tabItem}>
-            <Text style={[styles.tabIcon, tab === t.id && styles.tabActive]}>{t.icon}</Text>
-            <Text style={[styles.tabLabel, tab === t.id && styles.tabActive]}>{t.label}</Text>
-            {tab === t.id && <View style={styles.tabDot} />}
-          </Pressable>
-        ))}
+      <View style={{ flex: 1 }}>
+        {tab === "home" && HomeScreen}
+        {tab === "circle" && CircleScreen}
+        {tab === "history" && HistoryScreen}
+        {tab === "settings" && SettingsScreen}
       </View>
 
-      {/* Hold overlay */}
+      {/* Bottom nav — hidden during hold/sending */}
+      {sosPhase === "idle" && !incoming && (
+        <View style={styles.tabBar}>
+          {[
+            { id: "home", label: "Home", icon: "⌂" },
+            { id: "circle", label: "Circle", icon: "◯" },
+            { id: "history", label: "History", icon: "↻" },
+            { id: "settings", label: "Settings", icon: "⚙" },
+          ].map((t) => (
+            <Pressable key={t.id} onPress={() => setTab(t.id)} style={styles.tabItem}>
+              <Text style={[styles.tabIcon, tab === t.id && styles.tabActive]}>{t.icon}</Text>
+              <Text style={[styles.tabLabel, tab === t.id && styles.tabActive]}>{t.label}</Text>
+              {tab === t.id && <View style={styles.tabDot} />}
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {/* Hold overlay — 2 sec to arm, release to cancel */}
       {sosPhase === "holding" && (
         <View style={styles.countdownOverlay} pointerEvents="none">
           <Text style={styles.countdownLabel}>KEEP HOLDING</Text>
           <View style={styles.holdBarTrack}>
             <Animated.View style={[styles.holdBarFill, { width: holdWidth }]} />
           </View>
-          <Text style={styles.countdownHint}>Release early to cancel • 3 sec to arm</Text>
-        </View>
-      )}
-
-      {/* Countdown overlay */}
-      {sosPhase === "countdown" && (
-        <View style={styles.countdownOverlay}>
-          <Text style={styles.countdownLabel}>SENDING SOS IN</Text>
-          <Animated.View style={{ transform: [{ scale: countdownScale }] }}>
-            <Text style={styles.countdownNumber}>{countdown}</Text>
-          </Animated.View>
-          <Text style={styles.countdownHint}>
-            To: {sosMode === "all" ? "Everyone in Circle" : contacts.find((c) => c.id === sosMode)?.name}
-          </Text>
-          <Pressable onPress={cancelCountdown} style={styles.cancelBtn}>
-            <Text style={styles.cancelText}>CANCEL</Text>
-          </Pressable>
-          <Text style={styles.countdownHint}>Tap CANCEL to stop — no message sent</Text>
+          <Text style={styles.countdownHint}>Release early to cancel • 2 sec to send instantly</Text>
         </View>
       )}
 
@@ -537,6 +647,23 @@ export default function App() {
         <View style={styles.countdownOverlay}>
           <Text style={styles.countdownLabel}>SENDING…</Text>
           <Text style={styles.countdownHint}>Getting location and saving…</Text>
+        </View>
+      )}
+
+      {/* Urgent SOS incoming — repeats until ack */}
+      {incoming && (
+        <View style={[styles.countdownOverlay,{backgroundColor:"rgba(180,0,0,0.98)"}]}>
+          <Text style={[styles.countdownLabel,{color:"#fff"}]}>🚨 SOS from {incoming.sos?.from ? incoming.sos.from.slice(0,6) : "Someone"}</Text>
+          <Text style={{color:"#fff",fontWeight:"900",fontSize:16,marginTop:12, textAlign:"center"}}>{incoming.sos?.message}</Text>
+          <Pressable onPress={()=> Linking.openURL(incoming.sos?.locationLink||"").catch(()=>{})}>
+            <Text style={[styles.historyLink,{color:"#fff", textAlign:"center", marginTop:10}]}>{incoming.sos?.locationLink}</Text>
+          </Pressable>
+          {incoming.sos?.medicalNotes ? <Text style={{color:"#fff",marginTop:8}}>🩺 {incoming.sos.medicalNotes}</Text>:null}
+          <Text style={[styles.countdownHint,{color:"#fff", marginTop:10}]}>Alert {incoming.attempt}/{incoming.max} • repeats every 30s until you ack</Text>
+          <View style={{flexDirection:"row",gap:12,marginTop:18}}>
+            <Pressable onPress={()=>ackIncoming("I Saw It")} style={[styles.sheetClose,{paddingHorizontal:22}]}><Text style={styles.sheetCloseText}>I Saw It</Text></Pressable>
+            <Pressable onPress={()=>ackIncoming("On My Way")} style={[styles.sheetClose,{backgroundColor:C.green, borderColor:C.green}]}><Text style={[styles.sheetCloseText,{color:"#fff"}]}>I'm On My Way</Text></Pressable>
+          </View>
         </View>
       )}
 
@@ -580,7 +707,7 @@ export default function App() {
           <View style={styles.sheet}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>SOS to Someone</Text>
-            <Text style={styles.sheetSub}>Pick one person — then hold 3 sec → countdown → send only to them.</Text>
+            <Text style={styles.sheetSub}>Pick one person — then hold 2 sec → instant send only to them.</Text>
             {message.trim() ? <Text style={styles.sheetMsg}>"{message.trim()}"</Text> : <Text style={styles.sheetSub}>Message: {defaultMessage}</Text>}
             <View style={{ gap: 10, marginTop: 12 }}>
               {contacts.map((c) => (
@@ -622,7 +749,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   topSpacer: { height: Platform.OS === "web" ? 20 : 44, backgroundColor: C.bg },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: 28, paddingHorizontal: 16 },
+  scrollContent: { paddingBottom: 16, paddingHorizontal: 16 },
 
   header: { paddingTop: 8, paddingBottom: 10 },
   headerTitle: { color: C.white, fontSize: 28, fontWeight: "800", letterSpacing: -0.5 },
@@ -697,10 +824,10 @@ const styles = StyleSheet.create({
   callEmergencyText: { color: C.white, fontWeight: "700", fontSize: 13 },
   footer: { color: C.grey2, fontSize: 11, textAlign: "center", marginTop: 10, lineHeight: 14 },
 
-  // Tab bar
+  // Tab bar — lifted above Android nav buttons (Redmi 3-button nav)
   tabBar: {
     flexDirection: "row", backgroundColor: "#0F0F0F", borderTopWidth: 1, borderTopColor: C.border,
-    paddingVertical: 8, paddingBottom: Platform.OS === "ios" ? 20 : 10,
+    paddingTop: 10, paddingBottom: Platform.OS === "ios" ? 28 : 26,
   },
   tabItem: { flex: 1, alignItems: "center", gap: 2, paddingTop: 2 },
   tabIcon: { color: C.grey, fontSize: 18, fontWeight: "700" },
@@ -755,19 +882,16 @@ const styles = StyleSheet.create({
 
   // Overlays
   countdownOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(10,10,10,0.96)", alignItems: "center", justifyContent: "center",
-    paddingHorizontal: 24,
+    position: "absolute",
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: "rgba(10,10,10,0.98)", alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 24, paddingTop: 44, paddingBottom: 86,
+    zIndex: 50, elevation: 50,
   },
   countdownLabel: { color: C.grey, fontSize: 12, letterSpacing: 3, fontWeight: "700", textTransform: "uppercase" },
-  countdownNumber: { color: C.white, fontSize: 96, fontWeight: "900", marginTop: 6 },
   countdownHint: { color: C.grey, fontSize: 12, marginTop: 10, textAlign: "center" },
   holdBarTrack: { width: 220, height: 8, backgroundColor: C.bgElevated, borderRadius: 999, marginTop: 16, overflow: "hidden", borderWidth: 1, borderColor: C.border },
   holdBarFill: { height: "100%", backgroundColor: C.red, borderRadius: 999 },
-  cancelBtn: {
-    marginTop: 28, backgroundColor: C.white, borderRadius: 999, paddingVertical: 14, paddingHorizontal: 40,
-  },
-  cancelText: { color: "#000", fontWeight: "900", fontSize: 16, letterSpacing: 1 },
 
   // Sheets
   sheetBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" },

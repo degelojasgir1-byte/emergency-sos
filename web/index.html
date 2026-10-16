@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Emergency SOS — Dark • Red</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0A0A0A;--card:#1A1A1A;--card2:#242424;--elev:#2A2A2A;--red:#FF1A1A;--redGlow:rgba(255,26,26,.22);--grey:#A7A7A7;--grey2:#6A6A6A;--green:#1DB954;--border:#282828}
+html,body{height:100%;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+#app{max-width:480px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;background:var(--bg)}
+.top{padding:22px 16px 6px}
+.top h1{font-size:28px;font-weight:900;letter-spacing:-.5px}
+.top p{color:var(--grey);font-size:11px;letter-spacing:1px;text-transform:uppercase;margin-top:2px}
+.tabs{flex:1;overflow:auto;padding:0 16px 16px}
+.sectionHead{display:flex;justify-content:space-between;align-items:center;margin:10px 0}
+.sectionHead h2{font-size:18px;font-weight:800}
+.seeAll{color:var(--grey);font-size:13px;font-weight:700;cursor:pointer}
+.cards{display:flex;gap:10px;overflow:auto;padding-bottom:4px;scrollbar-width:none}
+.cards::-webkit-scrollbar{display:none}
+.card{width:92px;min-width:92px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;text-align:center}
+.card.add{border-style:dashed;background:transparent}
+.avatar{width:56px;height:56px;border-radius:28px;display:flex;align-items:center;justify-content:center;margin:0 auto 8px;position:relative;font-weight:900;font-size:20px;color:#fff}
+.dot{position:absolute;right:2px;bottom:2px;width:12px;height:12px;border-radius:6px;border:2px solid var(--card)}
+.card b{font-size:12px}
+.card small{font-size:10px;display:block;margin-top:2px}
+.msgCard{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin-top:14px}
+.msgHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.msgHead span{font-weight:800;font-size:13px}
+.msgHead button{background:none;border:none;color:#FF3B30;font-weight:800;font-size:12px;cursor:pointer}
+.msgInput{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;color:#fff;font-size:14px;outline:none;resize:none;min-height:44px}
+.chips{display:flex;gap:8px;overflow:auto;margin-top:10px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{background:var(--elev);border:1px solid var(--border);border-radius:999px;padding:7px 12px;font-size:12px;font-weight:700;white-space:nowrap;cursor:pointer;user-select:none}
+.hint{color:var(--grey);font-size:11px;margin-top:8px;line-height:14px}
+.sosWrap{display:flex;flex-direction:column;align-items:center;margin-top:18px;position:relative}
+.pulse{position:absolute;top:6px;width:200px;height:200px;border-radius:100px;background:var(--redGlow);border:1px solid rgba(255,26,26,.18);animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.sosBig{width:180px;height:180px;border-radius:90px;background:var(--red);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;user-select:none;position:relative;overflow:hidden;box-shadow:0 8px 22px rgba(255,26,26,.45);touch-action:none}
+.sosBig b{font-size:22px;letter-spacing:1px}
+.sosBig small{font-size:12px;opacity:.9;font-weight:800;letter-spacing:.6px}
+.holdFill{position:absolute;left:0;bottom:0;height:6px;background:rgba(255,255,255,.9);width:0%}
+.holdHint{color:var(--grey);font-size:12px;font-weight:700;margin-top:10px}
+.sosSmall{margin-top:14px;background:var(--card);border:1px solid var(--border);border-radius:999px;padding:14px 18px;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer}
+.sosSmall .dotSm{width:10px;height:10px;border-radius:5px;background:var(--red)}
+.sosSmall span{font-weight:800;font-size:14px}
+.call{margin-top:12px;background:#1A1A1A;border:1px solid #2A2A2A;border-radius:12px;padding:12px;text-align:center;font-weight:800;font-size:13px;cursor:pointer}
+.footer{color:var(--grey2);font-size:11px;text-align:center;margin-top:10px;line-height:14px}
+.tabbar{display:flex;background:#0F0F0F;border-top:1px solid var(--border);padding:6px 0 max(6px, env(safe-area-inset-bottom))}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;cursor:pointer;color:var(--grey);font-weight:700}
+.tab.active{color:#fff}
+.tab i{font-style:normal;font-size:18px}
+.tab em{font-style:normal;font-size:10px}
+.tab .bdot{width:4px;height:4px;border-radius:2px;background:var(--red);margin-top:2px;opacity:0}
+.tab.active .bdot{opacity:1}
+.pageTitle{font-size:24px;font-weight:900;margin-top:4px}
+.pageSub{color:var(--grey);font-size:12px;margin:4px 0 14px}
+.row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin-bottom:10px}
+.row .av{width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff}
+.addBox{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin-top:4px}
+.input{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;color:#fff;font-size:14px;outline:none;margin-bottom:10px}
+.btn{width:100%;background:#fff;color:#000;border:none;border-radius:999px;padding:12px;font-weight:900;font-size:14px;cursor:pointer}
+.btnSm{background:var(--elev);color:#fff;border:1px solid var(--border);border-radius:999px;padding:10px 14px;font-weight:800;font-size:12px;cursor:pointer}
+.info{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:8px;color:var(--grey);font-size:12px;line-height:18px}
+.info b{color:#fff}
+.empty{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;text-align:center;margin-top:8px}
+.hCard{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px}
+.hHead{display:flex;justify-content:space-between;align-items:center}
+.hHead b{color:#FF3B30;font-size:13px}
+.hHead span{color:var(--grey);font-size:11px}
+.link{color:#4DA3FF;font-size:11px;word-break:break-all;text-decoration:underline;cursor:pointer;display:block;margin-top:8px}
+.overlay{position:fixed;inset:0;background:rgba(10,10,10,.96);display:none;align-items:center;justify-content:center;flex-direction:column;padding:24px;text-align:center;z-index:20}
+.overlay.show{display:flex}
+.overlay h3{color:var(--grey);font-size:12px;letter-spacing:3px;text-transform:uppercase}
+.bigNum{font-size:96px;font-weight:900;margin-top:6px;animation:pop .3s ease}
+@keyframes pop{0%{transform:scale(.7)}100%{transform:scale(1)}}
+.bar{width:220px;height:8px;background:var(--elev);border:1px solid var(--border);border-radius:999px;margin-top:16px;overflow:hidden}
+.barFill{height:100%;background:var(--red);width:0%;transition:width .12s linear}
+.cancel{margin-top:28px;background:#fff;color:#000;border:none;border-radius:999px;padding:14px 40px;font-weight:900;font-size:16px;letter-spacing:1px;cursor:pointer}
+.sheetBg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:30}
+.sheetBg.show{display:flex}
+.sheet{width:100%;max-width:480px;margin:0 auto;background:#1A1A1A;border:1px solid var(--border);border-top-left-radius:20px;border-top-right-radius:20px;padding:20px 20px 28px}
+.handle{width:40px;height:4px;border-radius:2px;background:var(--grey2);margin:0 auto 16px}
+.pick{display:flex;align-items:center;gap:12px;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px;cursor:pointer;margin-bottom:10px}
+.sheetBtns{display:flex;gap:10px;margin-top:16px}
+.sbtn{flex:1;background:var(--elev);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center;font-weight:800;font-size:12px;cursor:pointer}
+.sbtn.green{background:var(--green);border-color:var(--green)}
+.inviteBox{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-top:10px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="top"><h1>Emergency SOS</h1><p>Dark • Red • Ready</p></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="tabbar">
+    <div class="tab active" data-tab="home"><i>⌂</i><em>Home</em><span class="bdot"></span></div>
+    <div class="tab" data-tab="circle"><i>◯</i><em>Circle</em><span class="bdot"></span></div>
+    <div class="tab" data-tab="history"><i>↻</i><em>History</em><span class="bdot"></span></div>
+    <div class="tab" data-tab="settings"><i>⚙</i><em>Settings</em><span class="bdot"></span></div>
+  </div>
+</div>
+
+<div class="overlay" id="holdOverlay"><h3>KEEP HOLDING</h3><div class="bar"><div class="barFill" id="holdBar"></div></div><p style="color:#A7A7A7;font-size:12px;margin-top:10px">Release early to cancel • 2 sec to send instantly</p></div>
+<div class="overlay" id="sendingOverlay"><h3>SENDING…</h3><p style="color:#A7A7A7;margin-top:10px">Getting location and saving…</p></div>
+<div class="overlay" id="incomingOverlay" style="background:rgba(180,0,0,.98);z-index:40">
+  <h3 style="color:#fff;letter-spacing:2px">🚨 SOS INCOMING</h3>
+  <p id="incomingFrom" style="color:#fff;font-weight:900;font-size:15px;margin-top:10px"></p>
+  <p id="incomingMsg" style="color:#fff;font-size:14px;margin-top:8px;max-width:320px;word-break:break-word"></p>
+  <a id="incomingLink" class="link" style="color:#fff" target="_blank" rel="noopener"></a>
+  <p id="incomingMed" style="color:#fff;font-size:12px;margin-top:8px;display:none"></p>
+  <p id="incomingAttempt" style="color:#fff;font-size:11px;margin-top:10px;opacity:.9"></p>
+  <div style="display:flex;gap:12px;margin-top:18px">
+    <button class="cancel" style="margin:0;padding:12px 22px;font-size:13px" onclick="ackIncoming('seen')">I Saw It</button>
+    <button class="cancel" style="margin:0;padding:12px 22px;font-size:13px;background:#1DB954;color:#fff;border:1px solid #1DB954" onclick="ackIncoming('way')">I'm On My Way</button>
+  </div>
+</div>
+
+<div class="sheetBg" id="successSheet"><div class="sheet">
+  <div class="handle"></div><h3 id="successTitle" style="font-size:20px;font-weight:900">✅ SOS Sent</h3>
+  <p id="successSub" style="color:#A7A7A7;font-size:12px;margin-top:6px"></p>
+  <p id="successMsg" style="margin-top:10px;font-style:italic"></p>
+  <a id="successLink" class="link" target="_blank" rel="noopener"></a>
+  <p id="successMed" style="color:#A7A7A7;font-size:12px;margin-top:8px;display:none"></p>
+  <div class="sheetBtns"><div class="sbtn" id="smsBtn">💬 SMS fallback</div><div class="sbtn green" id="waBtn">🟢 WhatsApp</div></div>
+  <p style="color:#6A6A6A;font-size:11px;text-align:center;margin-top:10px">Also try SMS/WhatsApp if contacts have no internet.</p>
+  <button class="btn" style="margin-top:14px" onclick="closeSuccess()">Done</button>
+</div></div>
+
+<div class="sheetBg" id="pickSheet"><div class="sheet">
+  <div class="handle"></div><h3 style="font-size:20px;font-weight:900">SOS to Someone</h3>
+  <p style="color:#A7A7A7;font-size:12px;margin-top:6px">Pick one person — then hold 2 sec → instant send only to them.</p>
+  <p id="pickMsg" style="color:#A7A7A7;font-size:12px;margin-top:8px"></p>
+  <div id="pickList" style="margin-top:12px"></div>
+  <button class="btn" style="margin-top:16px" onclick="closePick()">Cancel</button>
+</div></div>
+
+<script>
+const C={green:"#1DB954",grey:"#A7A7A7"};
+const PRESETS=["I fell","Intruder","Sick","Need help","Can't speak"];
+const DEFAULT_MSG="SOS — I need help. My live location attached.";
+
+// ── Any-internet config ──
+// Override via localStorage.sos_apiBase for quick testing. Hosted backend URL goes here after deploy.
+function getApiBase(){
+  const override = localStorage.getItem("sos_apiBase");
+  if(override) return override.replace(/\/$/,"");
+  // when hosted, replace this line with your Render URL, e.g. https://emergency-sos-backend.onrender.com
+  // keep localhost for local dev:
+  if(location.hostname==="localhost" || location.hostname==="127.0.0.1") return "http://localhost:3002";
+  if(location.hostname.startsWith("192.168.")) return `http://${location.hostname}:3002`;
+  return "http://localhost:3002";
+}
+let API_BASE = getApiBase();
+function genId(n=10){ const c="abcdefghijklmnopqrstuvwxyz0123456789"; let s=""; for(let i=0;i<n;i++) s+=c[Math.floor(Math.random()*c.length)]; return s; }
+let deviceId = localStorage.getItem("sos_deviceId") || genId(12);
+if(!localStorage.getItem("sos_deviceId")) localStorage.setItem("sos_deviceId", deviceId);
+async function apiFetch(path, opts={}){
+  const url = `${API_BASE}${path}`;
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), 7000);
+  try{
+    const r = await fetch(url, { ...opts, headers:{ "Content-Type":"application/json", ...(opts.headers||{}) }, signal: ctrl.signal });
+    const j = await r.json().catch(()=>null);
+    if(!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+    return j;
+  } finally { clearTimeout(t); }
+}
+
+let contacts=JSON.parse(localStorage.getItem("sos_contacts")||"null")||[
+  {id:"1",name:"Dad",phone:"",color:"#1DB954",online:true,initial:"D"},
+  {id:"2",name:"Sister",phone:"",color:"#E13300",online:true,initial:"S"},
+  {id:"3",name:"Alex",phone:"",color:"#8C5DFF",online:false,initial:"A"},
+];
+let history=JSON.parse(localStorage.getItem("sos_history")||"[]");
+let message=localStorage.getItem("sos_message")||"";
+let defaultMessage=localStorage.getItem("sos_default")||DEFAULT_MSG;
+let medicalNotes=localStorage.getItem("sos_medical")||"";
+let tab="home";
+let sosMode=null, sosPhase="idle", lastSent=null;
+let holdRAF=null;
+let inviteOut=null; // { code, link, circleId, expiresAt }
+let incoming=null;
+let netHint="";
+let pollTimer=null, alarmTimer=null;
+
+function save(){
+  localStorage.setItem("sos_contacts",JSON.stringify(contacts));
+  localStorage.setItem("sos_history",JSON.stringify(history));
+  localStorage.setItem("sos_message",message);
+  localStorage.setItem("sos_default",defaultMessage);
+  localStorage.setItem("sos_medical",medicalNotes);
+}
+function vib(p){try{if(navigator.vibrate) navigator.vibrate(p);}catch{}}
+function fmt(d=new Date()){return d.toLocaleString([],{dateStyle:"medium",timeStyle:"short"})}
+
+function render(){
+  const el=document.getElementById("tabs");
+  if(tab==="home") el.innerHTML=homeHTML();
+  else if(tab==="circle") el.innerHTML=circleHTML();
+  else if(tab==="history") el.innerHTML=historyHTML();
+  else if(tab==="settings") el.innerHTML=settingsHTML();
+  bind();
+}
+
+function homeHTML(){
+  return `
+  <div class="sectionHead"><h2>Your Trusted Circle</h2><span class="seeAll" onclick="go('circle')">See all</span></div>
+  <div class="cards">
+    ${contacts.map(c=>`
+      <div class="card"><div class="avatar" style="background:${c.color}">${c.initial}<span class="dot" style="background:${c.online?C.green:'#6A6A6A'}"></span></div><b>${c.name}</b><small style="color:${c.online?C.green:C.grey}">${c.online?'● online':'○ offline'}</small></div>
+    `).join("")}
+    <div class="card add" style="cursor:pointer" onclick="go('circle')"><div class="avatar" style="background:#242424;border:1px solid #282828;color:#A7A7A7">＋</div><b>Add</b><small>New contact</small></div>
+  </div>
+  ${netHint?`<p style="color:#1DB954;font-size:11px;margin-top:10px">${netHint}</p>`:""}
+  <div class="msgCard">
+    <div class="msgHead"><span>✎ Message (optional)</span>${message?'<button onclick="clearMsg()">Clear</button>':''}</div>
+    <textarea id="msgInput" class="msgInput" rows="2" maxlength="200" placeholder="${defaultMessage.replace(/"/g,'&quot;')}">${message}</textarea>
+    <div class="chips">${PRESETS.map(p=>`<div class="chip" data-chip="${p}">${p}</div>`).join("")}</div>
+    <p class="hint">This message + your live location will be sent with SOS. Leave empty to use default.</p>
+  </div>
+  <div class="sosWrap">
+    <div class="pulse"></div>
+    <div class="sosBig" id="sosAll"><b>SOS TO ALL</b><small>Hold 2 sec</small><div class="holdFill" id="holdFillAll"></div></div>
+    <p class="holdHint" id="holdHint">Sends to everyone in your Circle</p>
+  </div>
+  <div class="sosSmall" id="sosOne"><span class="dotSm"></span><span>SOS to Someone…</span><span style="color:#A7A7A7">›</span></div>
+  <div class="call" onclick="callEmergency()">📞 Call Emergency 112 / 911</div>
+  <p class="footer">Hold 2 sec → instant send. No countdown — fast when it matters.</p>
+  <p class="footer" style="color:#6A6A6A">Backend: ${API_BASE} • ID ${deviceId.slice(0,6)}</p>`;
+}
+function circleHTML(){
+  return `<div class="pageTitle">Trusted Circle</div><p class="pageSub">Invite must Accept. They can leave anytime.</p>
+  <div class="addBox">
+    <div style="font-weight:800">Invite (any internet) — code link only</div>
+    <p class="hint">Create a single-use code (30 min, revocable). Share via Copy Link or QR. Phone optional.</p>
+    <button class="btn" style="margin-top:10px" onclick="createInvite()">🔗 Create Invite Link</button>
+    ${inviteOut?`
+      <div class="inviteBox">
+        <div style="font-weight:900;font-size:13px">Code: ${inviteOut.code}</div>
+        <div style="color:#A7A7A7;font-size:11px;margin-top:4px">Expires ${new Date(inviteOut.expiresAt).toLocaleTimeString()} • Single-use • Revocable</div>
+        <div style="color:#4DA3FF;font-size:11px;margin-top:8px;word-break:break-all">sos://${inviteOut.code}</div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btnSm" style="flex:1" onclick="copyInvite()">Copy Link</button>
+          <button class="btnSm" style="flex:1" onclick="showQR()">Show QR</button>
+        </div>
+        <div style="text-align:center;margin-top:10px"><span style="color:#FF3B30;font-weight:800;font-size:12px;cursor:pointer" onclick="revokeInvite()">Revoke invite</span></div>
+        <div id="qrWrap" style="display:none;text-align:center;margin-top:10px;background:#fff;border-radius:12px;padding:8px"><img id="qrImg" style="width:180px;height:180px" alt="QR" /></div>
+      </div>
+    `:""}
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <input id="acceptCode" class="input" style="flex:1;margin-bottom:0" placeholder="Paste invite code" autocapitalize="off" value="" />
+      <button class="btn" style="width:auto;padding:10px 16px" onclick="acceptInvite()">Accept</button>
+    </div>
+    <p class="hint">Backend: ${API_BASE}</p>
+  </div>
+  ${contacts.map(c=>`<div class="row"><div class="av" style="background:${c.color}">${c.initial}</div><div style="flex:1"><div style="font-weight:800">${c.name}</div><div style="color:#A7A7A7;font-size:11px;margin-top:2px">${c.phone||'No phone — add to enable SMS'}</div></div><span style="width:10px;height:10px;border-radius:5px;background:${c.online?C.green:'#6A6A6A'}"></span><button onclick="removeContact('${c.id}')" style="background:none;border:none;color:#A7A7A7;font-size:16px;padding:6px 10px;cursor:pointer">✕</button></div>`).join("")}
+  <div class="addBox"><div style="font-weight:800;margin-bottom:10px">Add contact (local)</div>
+  <input id="addName" class="input" placeholder="Name" />
+  <input id="addPhone" class="input" placeholder="Phone (optional, for SMS fallback)" />
+  <button class="btn" onclick="addContact()">＋ Add to Circle</button>
+  <p class="hint">Local contacts stay on device. Use Invite above to link across internet.</p></div>`;
+}
+function historyHTML(){
+  if(!history.length) return `<div class="pageTitle">History</div><p class="pageSub">Past SOS events on this device.</p><div class="empty"><div style="font-size:28px">🕊️</div><div style="font-weight:800;margin-top:8px">No SOS yet</div><div style="color:#A7A7A7;font-size:12px;margin-top:4px">When you send one, it appears here with location + time.</div></div>`;
+  return `<div class="pageTitle">History</div><p class="pageSub">Past SOS events on this device.</p>
+  ${history.map(h=>`<div class="hCard"><div class="hHead"><b>${h.targets}</b><span>${h.time}</span></div><div style="margin-top:8px;font-size:13px;line-height:18px">${h.message}</div>${h.medicalNotes?`<div style="color:#A7A7A7;font-size:11px;margin-top:6px">🩺 ${h.medicalNotes}</div>`:''}<a class="link" href="${h.locationLink}" target="_blank" rel="noopener">${h.locationLink}</a></div>`).join("")}
+  <div style="text-align:center;padding:12px"><span style="color:#A7A7A7;font-weight:700;font-size:12px;cursor:pointer" onclick="clearHistory()">Clear history</span></div>`;
+}
+function settingsHTML(){
+  return `<div class="pageTitle">Settings</div>
+  <div style="font-weight:700;font-size:13px;margin:12px 0 8px">Default message (used if you send with empty box)</div>
+  <textarea id="defMsg" class="input" style="min-height:48px" rows="2">${defaultMessage}</textarea>
+  <div style="font-weight:700;font-size:13px;margin:8px 0">Medical notes (optional, sent with every SOS)</div>
+  <textarea id="medNotes" class="input" style="min-height:48px" rows="2" placeholder="e.g. Asthma, allergy to penicillin, blood type O+">${medicalNotes}</textarea>
+  <div style="font-weight:700;font-size:13px;margin:8px 0">Backend URL (any internet)</div>
+  <input id="apiBaseInput" class="input" value="${API_BASE}" placeholder="https://your-backend.onrender.com" />
+  <button class="btn" onclick="saveApiBase()">Save Backend URL</button>
+  <div class="info"><b>How SOS works</b><br/>1. Type a message or tap a chip (or leave empty)<br/>2. Hold SOS 2 sec — instant send (release early to cancel)<br/>3. It sends location + message + time to your Circle<br/><br/><span style="color:#A7A7A7">Device ID: ${deviceId}</span><br/><span style="color:#A7A7A7">Backend: ${API_BASE}</span></div>
+  <div class="call" style="margin-top:16px" onclick="callEmergency()">📞 Call Emergency 112 / 911</div>`;
+}
+
+function bind(){
+  document.querySelectorAll(".chip").forEach(ch=>ch.onclick=()=>{
+    const v=ch.dataset.chip;
+    message = message ? message+" "+v : v;
+    document.getElementById("msgInput").value=message; save();
+  });
+  const mi=document.getElementById("msgInput");
+  if(mi) mi.oninput=e=>{message=e.target.value; save();};
+  const dm=document.getElementById("defMsg");
+  if(dm) dm.oninput=e=>{defaultMessage=e.target.value; save();};
+  const mn=document.getElementById("medNotes");
+  if(mn) mn.oninput=e=>{medicalNotes=e.target.value; save();};
+  const sAll=document.getElementById("sosAll");
+  if(sAll){
+    sAll.addEventListener("pointerdown",e=>{e.preventDefault(); startHold("all");});
+    sAll.addEventListener("pointerup",cancelHold);
+    sAll.addEventListener("pointerleave",cancelHold);
+    sAll.addEventListener("pointercancel",cancelHold);
+  }
+  const sOne=document.getElementById("sosOne");
+  if(sOne) sOne.onclick=()=>openPick();
+}
+
+function go(t){tab=t; document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.tab===t)); render();}
+document.querySelectorAll(".tab").forEach(x=>x.onclick=()=>go(x.dataset.tab));
+
+function clearMsg(){message=""; save(); render();}
+function addContact(){
+  const n=document.getElementById("addName").value.trim();
+  const p=document.getElementById("addPhone").value.trim();
+  if(!n) return alert("Name required");
+  const colors=["#1DB954","#E13300","#8C5DFF","#FF6B00","#00B8D4"];
+  contacts.push({id:String(Date.now()),name:n,phone:p,color:colors[contacts.length%colors.length],online:false,initial:n[0].toUpperCase()});
+  save(); render();
+}
+function removeContact(id){if(!confirm("Remove contact?")) return; contacts=contacts.filter(c=>c.id!==id); save(); render();}
+function clearHistory(){history=[]; save(); render();}
+function callEmergency(){if(confirm("Call 112 / 911 ?")) location.href="tel:112";}
+function saveApiBase(){
+  const v=document.getElementById("apiBaseInput").value.trim().replace(/\/$/,"");
+  if(!v) return alert("Enter backend URL");
+  localStorage.setItem("sos_apiBase", v);
+  API_BASE=v;
+  alert("Saved: "+v);
+  render();
+}
+
+// ── Invite wiring ──
+async function createInvite(){
+  try{
+    const j = await apiFetch("/api/invites", { method:"POST", body: JSON.stringify({ from: deviceId, fromName:"You" }) });
+    inviteOut=j; render();
+  }catch(e){ alert("Invite failed: "+(e.message||e)); }
+}
+async function copyInvite(){
+  if(!inviteOut) return;
+  const link=`sos://${inviteOut.code}`;
+  try{ await navigator.clipboard.writeText(link); alert("Copied: "+link); }catch{ prompt("Copy this link:", link); }
+}
+function showQR(){
+  if(!inviteOut) return;
+  const wrap=document.getElementById("qrWrap");
+  const img=document.getElementById("qrImg");
+  if(wrap && img){
+    img.src=`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`sos://${inviteOut.code}`)}`;
+    wrap.style.display="block";
+  }
+}
+async function revokeInvite(){
+  if(!inviteOut) return;
+  try{ await apiFetch(`/api/invites/${encodeURIComponent(inviteOut.code)}/revoke`, { method:"POST", body:"{}" }); alert("Revoked"); inviteOut=null; render(); }catch(e){ alert("Revoke failed: "+(e.message||e)); }
+}
+async function acceptInvite(){
+  const inp=document.getElementById("acceptCode");
+  const code=(inp?inp.value:localStorage.getItem("sos_pendingCode")||"").trim() || prompt("Paste invite code:","") || "";
+  if(!code) return alert("Enter code");
+  try{
+    const j=await apiFetch(`/api/invites/${encodeURIComponent(code)}/accept`, { method:"POST", body: JSON.stringify({ deviceId, name:"Friend" }) });
+    alert(`Joined Circle ${j.circleId}. Members: ${j.members?.length||1}`);
+  }catch(e){ alert("Accept failed: "+(e.message||e)); }
+}
+// auto-accept from ?code=xxx
+(function(){
+  const m=location.search.match(/[?&]code=([^&]+)/);
+  if(m){ const c=decodeURIComponent(m[1]); localStorage.setItem("sos_pendingCode", c); setTimeout(()=>{ if(confirm(`Accept invite ${c} ?`)) acceptInvite(); }, 800); }
+})();
+
+// Hold 2 sec → instant send (no countdown) — Option 3
+let _holding=false, _holdStart=0;
+function startHold(mode){
+  if(sosPhase!=="idle") return;
+  _holding=true; sosMode=mode; sosPhase="holding";
+  document.getElementById("holdOverlay").classList.add("show");
+  _holdStart=Date.now();
+  vib(20);
+  function tick(){
+    if(!_holding) return;
+    const prog=Math.min(1,(Date.now()-_holdStart)/2000);
+    document.getElementById("holdBar").style.width=(prog*100)+"%";
+    const f=document.getElementById("holdFillAll"); if(f) f.style.width=(prog*100)+"%";
+    if(prog>=1){ _holding=false; document.getElementById("holdOverlay").classList.remove("show"); vib([0,180,60,180]); doSend(); return; }
+    holdRAF=requestAnimationFrame(tick);
+  }
+  holdRAF=requestAnimationFrame(tick);
+}
+function cancelHold(){
+  if(sosPhase!=="holding") return;
+  _holding=false; cancelAnimationFrame(holdRAF);
+  document.getElementById("holdOverlay").classList.remove("show");
+  document.getElementById("holdBar").style.width="0%";
+  const f=document.getElementById("holdFillAll"); if(f) f.style.width="0%";
+  sosPhase="idle"; sosMode=null;
+}
+async function doSend(){
+  document.getElementById("sendingOverlay").classList.add("show");
+  sosPhase="sending";
+  let link="Location unavailable (no GPS permission)", coords=null;
+  try{
+    const pos=await new Promise((res,rej)=>{
+      if(!navigator.geolocation) return rej("no geo");
+      navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:false, timeout:7000});
+    });
+    coords=pos.coords;
+    link=`https://maps.google.com/?q=${coords.latitude},${coords.longitude}`;
+  }catch(e){ link="Location unavailable"; }
+  const msg=(message.trim()||defaultMessage).trim();
+  const label=sosMode==="all"?"All":(contacts.find(c=>c.id===sosMode)?.name||"—");
+  const entry={id:String(Date.now()),time:fmt(new Date()),targets:label,message:msg,locationLink:link,coords,medicalNotes:medicalNotes.trim()||null};
+  history.unshift(entry); lastSent=entry; save();
+  // push to backend for any-internet delivery (best-effort)
+  apiFetch("/api/sos", { method:"POST", body: JSON.stringify({ from: deviceId, targets: label, message: msg, locationLink: link, medicalNotes: entry.medicalNotes }) }).then(j=>{
+    netHint = `Pushed to ${j.pushedTo||0} device(s) in Circle • also saved locally`;
+    render(); setTimeout(()=>{ netHint=""; render(); }, 7000);
+  }).catch(()=>{ netHint="Saved locally — will retry when online"; render(); setTimeout(()=>{ netHint=""; render(); }, 7000); });
+  document.getElementById("sendingOverlay").classList.remove("show");
+  sosPhase="success"; vib([0,180,60,180,60,300]);
+  document.getElementById("successSub").textContent=`To: ${entry.targets} • ${entry.time}`;
+  document.getElementById("successMsg").textContent=`"${entry.message}"`;
+  const a=document.getElementById("successLink"); a.textContent=entry.locationLink; a.href=entry.locationLink;
+  const m=document.getElementById("successMed");
+  if(entry.medicalNotes){ m.textContent="🩺 "+entry.medicalNotes; m.style.display="block"; } else m.style.display="none";
+  document.getElementById("successSheet").classList.add("show");
+}
+function closeSuccess(){
+  document.getElementById("successSheet").classList.remove("show");
+  sosPhase="idle"; sosMode=null;
+  const f=document.getElementById("holdFillAll"); if(f) f.style.width="0%";
+}
+document.getElementById("smsBtn").onclick=()=>{
+  if(!lastSent) return;
+  const body=encodeURIComponent(`${lastSent.message}\n${lastSent.locationLink}\n${lastSent.medicalNotes?"Medical: "+lastSent.medicalNotes+"\n":""}Sent: ${lastSent.time}`);
+  location.href=`sms:?body=${body}`;
+};
+document.getElementById("waBtn").onclick=()=>{
+  if(!lastSent) return;
+  const body=encodeURIComponent(`${lastSent.message}\n${lastSent.locationLink}\n${lastSent.medicalNotes?"Medical: "+lastSent.medicalNotes+"\n":""}Sent: ${lastSent.time}`);
+  window.open(`https://wa.me/?text=${body}`,"_blank");
+};
+function openPick(){
+  document.getElementById("pickMsg").textContent=message.trim()?`"${message.trim()}"`:`Message: ${defaultMessage}`;
+  const list=document.getElementById("pickList");
+  list.innerHTML=contacts.map(c=>`<div class="pick" data-pick="${c.id}"><div class="av" style="background:${c.color}">${c.initial}</div><div style="flex:1"><div style="font-weight:800">${c.name}</div><div style="color:#A7A7A7;font-size:11px">${c.phone||'No phone'}</div></div><span style="color:#A7A7A7;font-size:20px">›</span></div>`).join("");
+  list.querySelectorAll(".pick").forEach(p=>p.onclick=()=>{
+    const id=p.dataset.pick;
+    closePick();
+    setTimeout(()=>startHold(id),350);
+  });
+  document.getElementById("pickSheet").classList.add("show");
+}
+function closePick(){document.getElementById("pickSheet").classList.remove("show");}
+document.getElementById("successSheet").onclick=e=>{if(e.target.id==="successSheet") closeSuccess();};
+document.getElementById("pickSheet").onclick=e=>{if(e.target.id==="pickSheet") closePick();};
+
+// ── Incoming urgent SOS polling (any internet) ──
+async function pollIncoming(){
+  try{
+    const out = await apiFetch(`/api/push?deviceId=${encodeURIComponent(deviceId)}`);
+    if(Array.isArray(out) && out.length>0){
+      const newest = out[out.length-1];
+      incoming = newest;
+      document.getElementById("incomingFrom").textContent = `From ${newest.sos.from?newest.sos.from.slice(0,6):"Someone"} • ${newest.sos.time}`;
+      document.getElementById("incomingMsg").textContent = newest.sos.message;
+      const a=document.getElementById("incomingLink"); a.textContent=newest.sos.locationLink; a.href=newest.sos.locationLink;
+      const med=document.getElementById("incomingMed");
+      if(newest.sos.medicalNotes){ med.textContent="🩺 "+newest.sos.medicalNotes; med.style.display="block"; } else med.style.display="none";
+      document.getElementById("incomingAttempt").textContent = `Alert ${newest.attempt}/${newest.max} • repeats every 30s until you acknowledge`;
+      document.getElementById("incomingOverlay").classList.add("show");
+      vib([0,1000,300,1000]);
+      if(!alarmTimer) alarmTimer=setInterval(()=>vib([0,1000,300,1000]), 4000);
+    }
+  }catch{}
+}
+async function ackIncoming(kind){
+  if(!incoming) return;
+  const sid=incoming.sosId;
+  incoming=null;
+  document.getElementById("incomingOverlay").classList.remove("show");
+  if(alarmTimer){ clearInterval(alarmTimer); alarmTimer=null; }
+  try{ vib(60); }catch{}
+  try{ await apiFetch(`/api/push/${encodeURIComponent(sid)}/ack`, { method:"POST", body: JSON.stringify({ deviceId }) }); }catch{}
+}
+pollIncoming();
+pollTimer=setInterval(pollIncoming, 30000);
+
+render();
+</script>
+</body>
+</html>
